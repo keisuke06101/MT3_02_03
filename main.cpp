@@ -37,7 +37,7 @@ struct Ray {
 
 struct Segment {
 	Vector3 origin;  //!< 始点
-	Vector3 dift;    //!< 終点への差分ベクトル
+	Vector3 diff;    //!< 終点への差分ベクトル
 	uint32_t color;
 
 	static constexpr float KTMin = 0.0f;
@@ -54,6 +54,10 @@ struct Sphere
 struct Plane {
 	Vector3 normal;
 	float distance;
+};
+
+struct Triangle {
+	Vector3 vertices[3]; //!< 頂点
 };
 
 // 逆行列
@@ -568,15 +572,15 @@ Vector3 Project(const Vector3& v1, const Vector3& v2)
 Vector3 ClosestPoint(const Vector3& point, const Segment& segment)
 {
 	Vector3 v = Subtract(point, segment.origin);
-	float t = Dot(v, segment.dift) / Dot(segment.dift, segment.dift);
+	float t = Dot(v, segment.diff) / Dot(segment.diff, segment.diff);
 	t = std::clamp(t, 0.0f, 1.0f);
-	return Add(segment.origin, Multiply(t, segment.dift));
+	return Add(segment.origin, Multiply(t, segment.diff));
 }
 
 void DrawSegment(const Segment& segment, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color)
 {
 	Vector3 start = Transform(Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
-	Vector3 end = Transform(Transform(Add(segment.origin, segment.dift), viewProjectionMatrix), viewportMatrix);
+	Vector3 end = Transform(Transform(Add(segment.origin, segment.diff), viewProjectionMatrix), viewportMatrix);
 	Novice::DrawLine(int(start.x), int(start.y), int(end.x), int(end.y), color);
 }
 
@@ -584,7 +588,7 @@ void DrawSegment(const Segment& segment, const Matrix4x4& viewProjectionMatrix, 
 bool IsCollision(const Segment& s1, const Plane s2)
 {
 	// まず垂直判定を行うために、法線と線の内積を求める
-	float dot = Dot(s2.normal, s1.dift);
+	float dot = Dot(s2.normal, s1.diff);
 
 	if (dot != 0.0f)
 	{
@@ -596,6 +600,53 @@ bool IsCollision(const Segment& s1, const Plane s2)
 	return false;
 }
 
+bool IsCollisionT(const Triangle& s1, const Segment& s2)
+{
+	Vector3 v01 = Subtract(s1.vertices[1], s1.vertices[0]);
+	Vector3 v12 = Subtract(s1.vertices[2], s1.vertices[1]);
+	Vector3 normal = Normalize(Cross(v01, v12));
+	Plane plane{ .normal = normal, .distance = Dot(s1.vertices[0], normal) };
+	float dot = Dot(plane.normal, s2.diff);
+	if (dot == 0.0f)
+	{
+		return false;
+	}
+	// tを求める
+	float t = (plane.distance - Dot(s2.origin, plane.normal)) / dot;
+	if ((Segment::KTMin > t) || (t > Segment::KTMax)) {
+		return false;
+	}
+	Vector3 intersect = Add(s2.origin, Multiply(t, s2.diff));
+	Vector3 v1p = Subtract(intersect, s1.vertices[1]);
+	if (Dot(Cross(v01, v1p), normal) < 0.0f) {
+		return false;
+	}
+
+	Vector3 v2p = Subtract(intersect, s1.vertices[2]);
+	if (Dot(Cross(v12, v2p), normal) < 0.0f) {
+		return false;
+	}
+
+	Vector3 v0p = Subtract(intersect, s1.vertices[0]);
+	Vector3 v20 = Subtract(s1.vertices[0], s1.vertices[2]);
+	if (Dot(Cross(v20, v0p), normal) < 0.0f) {
+		return false;
+	}
+
+	return true;
+}
+
+void DrawTriangle(const Triangle& triangle, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color)
+{
+	Vector3 screenVertices[3] = {
+		Transform(Transform(triangle.vertices[0], viewProjectionMatrix), viewportMatrix),
+		Transform(Transform(triangle.vertices[1], viewProjectionMatrix), viewportMatrix),
+		Transform(Transform(triangle.vertices[2], viewProjectionMatrix), viewportMatrix),
+	};
+	Novice::DrawTriangle(
+		int(screenVertices[0].x), int(screenVertices[0].y), int(screenVertices[1].x),
+		int(screenVertices[1].y), int(screenVertices[2].x), int(screenVertices[2].y), color, kFillModeWireFrame);
+}
 
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -610,7 +661,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Segment segment{ {0.0f, 0.0f, 0.0f}, {-1.0f, 1.0f, 0.0f}, WHITE };
 	Vector3 point{ -1.5f, 0.6f, 0.6f };
 
-	Vector3 project = Project(Subtract(point, segment.origin), segment.dift);
+	Vector3 project = Project(Subtract(point, segment.origin), segment.diff);
 	Vector3 closestPoint = ClosestPoint(point, segment);
 
 	Sphere pointSphere{ point, 0.01f };
@@ -635,6 +686,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	{
 		{0.0f,1.0f,0.0f},
 		1.0f,
+	};
+
+	Triangle triangle =
+	{
+		{
+			{-0.5f, -0.5f, 0.0f},
+			{ 0.0f,  0.5f, 0.0f},
+			{ 0.5f, -0.5f, 0.0f}
+		}
 	};
 
 	int kWindowWidth = 1280;
@@ -662,9 +722,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		ImGui::DragFloat3("CameraTranslate", &cameraTranslate.x, 0.01f);
 		ImGui::DragFloat3("CameraRotate", &cameraRotate.x, 0.01f);
 		ImGui::DragFloat3("SegmentOrigin", &segment.origin.x, 0.01f);
-		ImGui::DragFloat3("SegmentDift", &segment.dift.x, 0.01f);
-		ImGui::DragFloat3("PlaneNormal", &plane.normal.x, 0.01f);
-		ImGui::DragFloat("PlaneDistance", &plane.distance, 0.01f);
+		ImGui::DragFloat3("SegmentDift", &segment.diff.x, 0.01f);
+		ImGui::DragFloat3("TriangleV0", &triangle.vertices[0].x, 0.01f);
+		ImGui::DragFloat3("TriangleV1", &triangle.vertices[1].x, 0.01f);
+		ImGui::DragFloat3("TriangleV2", &triangle.vertices[2].x, 0.01f);
 		plane.normal = Normalize(plane.normal);
 
 		ImGui::End();
@@ -682,9 +743,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		Matrix4x4 viewportMatrix = MakeViewportMatrix(0, 0, float(kWindowWidth), float(kWindowHeight), 0.0f, 1.0f);
 		
 		Vector3 start = Transform(Transform(segment.origin, worldViewProjectionMatrix), viewportMatrix);
-		Vector3 end = Transform(Transform(Add(segment.origin, segment.dift), worldViewProjectionMatrix), viewportMatrix);
+		Vector3 end = Transform(Transform(Add(segment.origin, segment.diff), worldViewProjectionMatrix), viewportMatrix);
 
-		segment.color = IsCollision(segment, plane) ? RED : WHITE;
+		segment.color = IsCollisionT(triangle, segment) ? RED : WHITE;
 
 		///
 		/// ↑更新処理ここまで
@@ -697,7 +758,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 		DrawGrid(worldViewProjectionMatrix, viewportMatrix);
 		DrawSegment(segment, worldViewProjectionMatrix, viewportMatrix, segment.color);
-		DrawPlane(plane, worldViewProjectionMatrix, viewportMatrix, WHITE);
+		DrawTriangle(triangle, worldViewProjectionMatrix, viewportMatrix, WHITE);
+		//DrawPlane(plane, worldViewProjectionMatrix, viewportMatrix, WHITE);
 
 		///
 		/// ↑描画処理ここまで
