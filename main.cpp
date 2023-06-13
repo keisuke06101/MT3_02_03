@@ -60,6 +60,11 @@ struct Triangle {
 	Vector3 vertices[3]; //!< 頂点
 };
 
+struct AABB {
+	Vector3 min;  //!< 最小点
+	Vector3 max;  //!< 最大店
+};
+
 // 逆行列
 Matrix4x4 Inverse(const Matrix4x4& m)
 {
@@ -600,40 +605,17 @@ bool IsCollision(const Segment& s1, const Plane s2)
 	return false;
 }
 
-bool IsCollisionT(const Triangle& s1, const Segment& s2)
+bool IsCollisionAABB(const AABB& aabb1, const AABB& aabb2)
 {
-	Vector3 v01 = Subtract(s1.vertices[1], s1.vertices[0]);
-	Vector3 v12 = Subtract(s1.vertices[2], s1.vertices[1]);
-	Vector3 normal = Normalize(Cross(v01, v12));
-	Plane plane{ .normal = normal, .distance = Dot(s1.vertices[0], normal) };
-	float dot = Dot(plane.normal, s2.diff);
-	if (dot == 0.0f)
+	if ((aabb1.min.x <= aabb2.max.x && aabb1.max.x >= aabb2.min.x) &&
+		(aabb1.min.y <= aabb2.max.y && aabb1.max.y >= aabb2.min.y) &&
+		(aabb1.min.z <= aabb2.max.z && aabb1.max.z >= aabb2.min.z))
 	{
+		return true;
+	}
+	else {
 		return false;
 	}
-	// tを求める
-	float t = (plane.distance - Dot(s2.origin, plane.normal)) / dot;
-	if ((Segment::KTMin > t) || (t > Segment::KTMax)) {
-		return false;
-	}
-	Vector3 intersect = Add(s2.origin, Multiply(t, s2.diff));
-	Vector3 v1p = Subtract(intersect, s1.vertices[1]);
-	if (Dot(Cross(v01, v1p), normal) < 0.0f) {
-		return false;
-	}
-
-	Vector3 v2p = Subtract(intersect, s1.vertices[2]);
-	if (Dot(Cross(v12, v2p), normal) < 0.0f) {
-		return false;
-	}
-
-	Vector3 v0p = Subtract(intersect, s1.vertices[0]);
-	Vector3 v20 = Subtract(s1.vertices[0], s1.vertices[2]);
-	if (Dot(Cross(v20, v0p), normal) < 0.0f) {
-		return false;
-	}
-
-	return true;
 }
 
 void DrawTriangle(const Triangle& triangle, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color)
@@ -646,6 +628,50 @@ void DrawTriangle(const Triangle& triangle, const Matrix4x4& viewProjectionMatri
 	Novice::DrawTriangle(
 		int(screenVertices[0].x), int(screenVertices[0].y), int(screenVertices[1].x),
 		int(screenVertices[1].y), int(screenVertices[2].x), int(screenVertices[2].y), color, kFillModeWireFrame);
+}
+
+void DrawAABB(const AABB& aabb, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color)
+{
+	Vector3 Vertices[8]=
+	{
+		{aabb.min.x, aabb.min.y, aabb.min.z},
+		{aabb.min.x, aabb.max.y, aabb.min.z},
+		{aabb.min.x, aabb.max.y, aabb.max.z},
+		{aabb.min.x, aabb.min.y, aabb.max.z},
+		{aabb.max.x, aabb.min.y, aabb.min.z},
+		{aabb.max.x, aabb.max.y, aabb.min.z},
+		{aabb.max.x, aabb.max.y, aabb.max.z},
+	    {aabb.max.x, aabb.min.y, aabb.max.z},
+	};
+	
+	//	スクリーン座標系へ変換
+	Vector3 screenVertices[8];
+
+	for (uint32_t index = 0; index < 8; ++index)
+	{
+		screenVertices[index] =
+			Transform(Transform(Vertices[index], viewProjectionMatrix), viewportMatrix);
+	}
+	// 線を引いて描画
+	std::pair<uint32_t, uint32_t>indices[12] = {
+		{0,1},
+		{1,2},
+		{2,3},
+		{3,0},
+		{4,5},
+		{5,6},
+		{6,7},
+		{7,4},
+		{0,4},
+		{1,5},
+		{2,6},
+		{3,7},
+	};
+	for (auto& index : indices) {
+		Novice::DrawLine(
+			int(screenVertices[index.first].x), int(screenVertices[index.first].y),
+			int(screenVertices[index.second].x), int(screenVertices[index.second].y), color);
+	}
 }
 
 // Windowsアプリでのエントリーポイント(main関数)
@@ -697,6 +723,30 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		}
 	};
 
+	AABB aabb1{
+		.min{-0.5f, -0.5f, -0.5f},
+		.max{0.0f, 0.0f, 0.0f},
+	};
+
+	AABB aabb2{
+		.min{0.2f, 0.2f, 0.2f},
+		.max{1.0f, 1.0f, 1.0f},
+	};
+
+	aabb1.min.x = (std::min)(aabb1.min.x, aabb1.max.x);
+	aabb1.max.x = (std::max)(aabb1.min.x, aabb1.max.x);
+	aabb1.min.y = (std::min)(aabb1.min.y, aabb1.max.y);
+	aabb1.max.y = (std::max)(aabb1.min.y, aabb1.max.y);
+	aabb1.min.z = (std::min)(aabb1.min.z, aabb1.max.z);
+	aabb1.max.z = (std::max)(aabb1.min.z, aabb1.max.z);
+
+	aabb2.min.x = (std::min)(aabb2.min.x, aabb2.max.x);
+	aabb2.max.x = (std::max)(aabb2.min.x, aabb2.max.x);
+	aabb2.min.y = (std::min)(aabb2.min.y, aabb2.max.y);
+	aabb2.max.y = (std::max)(aabb2.min.y, aabb2.max.y);
+	aabb2.min.z = (std::min)(aabb2.min.z, aabb2.max.z);
+	aabb2.max.z = (std::max)(aabb2.min.z, aabb2.max.z);
+
 	int kWindowWidth = 1280;
 
 	int kWindowHeight = 720;
@@ -721,12 +771,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		ImGui::Begin("Window");
 		ImGui::DragFloat3("CameraTranslate", &cameraTranslate.x, 0.01f);
 		ImGui::DragFloat3("CameraRotate", &cameraRotate.x, 0.01f);
-		ImGui::DragFloat3("SegmentOrigin", &segment.origin.x, 0.01f);
-		ImGui::DragFloat3("SegmentDift", &segment.diff.x, 0.01f);
-		ImGui::DragFloat3("TriangleV0", &triangle.vertices[0].x, 0.01f);
-		ImGui::DragFloat3("TriangleV1", &triangle.vertices[1].x, 0.01f);
-		ImGui::DragFloat3("TriangleV2", &triangle.vertices[2].x, 0.01f);
-		plane.normal = Normalize(plane.normal);
+		ImGui::DragFloat3("aabb1.min", &aabb1.min.x, 0.01f);
+		ImGui::DragFloat3("aabb1.max", &aabb1.max.x, 0.01f);
+		ImGui::DragFloat3("aabb2.min", &aabb2.min.x, 0.01f);
+		ImGui::DragFloat3("aabb2.max", &aabb2.max.x, 0.01f);
 
 		ImGui::End();
 
@@ -745,7 +793,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		Vector3 start = Transform(Transform(segment.origin, worldViewProjectionMatrix), viewportMatrix);
 		Vector3 end = Transform(Transform(Add(segment.origin, segment.diff), worldViewProjectionMatrix), viewportMatrix);
 
-		segment.color = IsCollisionT(triangle, segment) ? RED : WHITE;
+		segment.color = IsCollisionAABB(aabb1, aabb2) ? RED : WHITE;
 
 		///
 		/// ↑更新処理ここまで
@@ -757,9 +805,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 		DrawGrid(worldViewProjectionMatrix, viewportMatrix);
-		DrawSegment(segment, worldViewProjectionMatrix, viewportMatrix, segment.color);
-		DrawTriangle(triangle, worldViewProjectionMatrix, viewportMatrix, WHITE);
+		//DrawSegment(segment, worldViewProjectionMatrix, viewportMatrix, segment.color);
+		//DrawTriangle(triangle, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		//DrawPlane(plane, worldViewProjectionMatrix, viewportMatrix, WHITE);
+		DrawAABB(aabb1, worldViewProjectionMatrix, viewportMatrix, segment.color);
+		DrawAABB(aabb2, worldViewProjectionMatrix, viewportMatrix, WHITE);
 
 		///
 		/// ↑描画処理ここまで
