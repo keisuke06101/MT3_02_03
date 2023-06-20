@@ -589,19 +589,40 @@ void DrawSegment(const Segment& segment, const Matrix4x4& viewProjectionMatrix, 
 	Novice::DrawLine(int(start.x), int(start.y), int(end.x), int(end.y), color);
 }
 
-// 衝突判定処理
-bool IsCollision(const Segment& s1, const Plane s2)
+// オーバーロード
+Vector3& operator-=(Vector3& v1, const Vector3& v2)
 {
-	// まず垂直判定を行うために、法線と線の内積を求める
-	float dot = Dot(s2.normal, s1.diff);
+	// TODO: return ステートメントをここに挿入します
+	v1.x -= v2.x;
+	v1.y -= v2.y;
+	v1.z -= v2.z;
 
-	if (dot != 0.0f)
+	return v1;
+}
+const Vector3 operator-(const Vector3& v1, const Vector3& v2)
+{
+	Vector3 tmp(v1);
+	return tmp -= v2;
+}
+
+// 衝突判定処理
+bool IsCollision(const AABB& aabb, const Sphere& sphere)
+{
+	//	最近接点を求める
+	Vector3 closestPoint{
+		std::clamp(sphere.center.x, aabb.min.x, aabb.max.x),
+		std::clamp(sphere.center.y, aabb.min.y, aabb.max.y),
+		std::clamp(sphere.center.z, aabb.min.z, aabb.max.z)
+	};
+
+	// 最近接点と球の中心との距離を求める
+	float distance = Length(closestPoint - sphere.center);
+	// 距離が半径よりも小さければ衝突
+	if (distance <= sphere.radius)
 	{
-		// tを求める
-		float t = (s2.distance - Dot(s1.origin, s2.normal)) / dot;
-		return (Segment::KTMin <= t) && (t <= Segment::KTMax);
+		return true;
 	}
-	
+
 	return false;
 }
 
@@ -773,8 +794,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		ImGui::DragFloat3("CameraRotate", &cameraRotate.x, 0.01f);
 		ImGui::DragFloat3("aabb1.min", &aabb1.min.x, 0.01f);
 		ImGui::DragFloat3("aabb1.max", &aabb1.max.x, 0.01f);
-		ImGui::DragFloat3("aabb2.min", &aabb2.min.x, 0.01f);
-		ImGui::DragFloat3("aabb2.max", &aabb2.max.x, 0.01f);
+		ImGui::DragFloat3("Sphere1Center", &sphere.center.x, 0.01f);
+		ImGui::DragFloat("Sphere1Radius", &sphere.radius, 0.01f);
 
 		ImGui::End();
 
@@ -793,7 +814,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		Vector3 start = Transform(Transform(segment.origin, worldViewProjectionMatrix), viewportMatrix);
 		Vector3 end = Transform(Transform(Add(segment.origin, segment.diff), worldViewProjectionMatrix), viewportMatrix);
 
-		segment.color = IsCollisionAABB(aabb1, aabb2) ? RED : WHITE;
+		segment.color = IsCollision(aabb1, sphere) ? RED : WHITE;
 
 		///
 		/// ↑更新処理ここまで
@@ -809,7 +830,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		//DrawTriangle(triangle, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		//DrawPlane(plane, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		DrawAABB(aabb1, worldViewProjectionMatrix, viewportMatrix, segment.color);
-		DrawAABB(aabb2, worldViewProjectionMatrix, viewportMatrix, WHITE);
+		DrawSphere(sphere, worldViewProjectionMatrix, viewportMatrix, sphere.color);
 
 		///
 		/// ↑描画処理ここまで
