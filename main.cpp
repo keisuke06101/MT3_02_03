@@ -633,13 +633,21 @@ bool IsCollision(const AABB& aabb, const Segment& segment)
 	};
 
 	//	AABBとの衝突判定（貫通点）のtが小さいほう
-	float tmin = max(max(tNear.x, tNear.y), tNear.z);
+	float tmin = (std::max)(tNear.x, (std::max)(tNear.y, tNear.z));
 	//	AABBとの衝突判定（貫通点）のtが大きいほう
-	float tmax = min(min(tFar.x, tFar.y), tFar.z);
+	float tmax = (std::min)(tFar.x, (std::min)(tFar.y, tFar.z));
 	// 距離が半径よりも小さければ衝突
 	if (tmin <= tmax)
 	{
-		return true;
+		if ((tmin * tmax) < 0.0f)
+		{
+			return true;
+		}
+		if (Segment::KTMin <= tmin && tmin <= Segment::KTMax ||
+			Segment::KTMin <= tmax && tmax <= Segment::KTMax)
+		{
+			return true;
+		}
 	}
 
 	return false;
