@@ -37,7 +37,7 @@ struct Ray {
 
 struct Segment {
 	Vector3 origin;  //!< 始点
-	Vector3 diff;    //!< 終点への差分ベクトル
+	Vector3 dift;    //!< 終点への差分ベクトル
 	uint32_t color;
 
 	static constexpr float KTMin = 0.0f;
@@ -577,15 +577,15 @@ Vector3 Project(const Vector3& v1, const Vector3& v2)
 Vector3 ClosestPoint(const Vector3& point, const Segment& segment)
 {
 	Vector3 v = Subtract(point, segment.origin);
-	float t = Dot(v, segment.diff) / Dot(segment.diff, segment.diff);
+	float t = Dot(v, segment.dift) / Dot(segment.dift, segment.dift);
 	t = std::clamp(t, 0.0f, 1.0f);
-	return Add(segment.origin, Multiply(t, segment.diff));
+	return Add(segment.origin, Multiply(t, segment.dift));
 }
 
 void DrawSegment(const Segment& segment, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color)
 {
 	Vector3 start = Transform(Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
-	Vector3 end = Transform(Transform(Add(segment.origin, segment.diff), viewProjectionMatrix), viewportMatrix);
+	Vector3 end = Transform(Transform(Add(segment.origin, segment.dift), viewProjectionMatrix), viewportMatrix);
 	Novice::DrawLine(int(start.x), int(start.y), int(end.x), int(end.y), color);
 }
 
@@ -606,19 +606,38 @@ const Vector3 operator-(const Vector3& v1, const Vector3& v2)
 }
 
 // 衝突判定処理
-bool IsCollision(const AABB& aabb, const Sphere& sphere)
+bool IsCollision(const AABB& aabb, const Segment& segment)
 {
-	//	最近接点を求める
-	Vector3 closestPoint{
-		std::clamp(sphere.center.x, aabb.min.x, aabb.max.x),
-		std::clamp(sphere.center.y, aabb.min.y, aabb.max.y),
-		std::clamp(sphere.center.z, aabb.min.z, aabb.max.z)
+	Vector3 mins = {
+		(aabb.min.x - segment.origin.x) / segment.dift.x,
+		(aabb.min.y - segment.origin.y) / segment.dift.y,
+		(aabb.min.z - segment.origin.z) / segment.dift.z
 	};
 
-	// 最近接点と球の中心との距離を求める
-	float distance = Length(closestPoint - sphere.center);
+	Vector3 maxs = {
+		(aabb.max.x - segment.origin.x) / segment.dift.x,
+		(aabb.max.y - segment.origin.y) / segment.dift.y,
+		(aabb.max.z - segment.origin.z) / segment.dift.z
+	};
+
+	Vector3 tNear = {
+		(std::min)(mins.x, maxs.x),
+		(std::min)(mins.y, maxs.y),
+		(std::min)(mins.z, maxs.z)
+	};
+
+	Vector3 tFar = {
+		(std::max)(mins.x, maxs.x),
+		(std::max)(mins.y, maxs.y),
+		(std::max)(mins.z, maxs.z)
+	};
+
+	//	AABBとの衝突判定（貫通点）のtが小さいほう
+	float tmin = max(max(tNear.x, tNear.y), tNear.z);
+	//	AABBとの衝突判定（貫通点）のtが大きいほう
+	float tmax = min(min(tFar.x, tFar.y), tFar.z);
 	// 距離が半径よりも小さければ衝突
-	if (distance <= sphere.radius)
+	if (tmin <= tmax)
 	{
 		return true;
 	}
@@ -705,10 +724,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	char keys[256] = {0};
 	char preKeys[256] = {0};
 
-	Segment segment{ {0.0f, 0.0f, 0.0f}, {-1.0f, 1.0f, 0.0f}, WHITE };
+	Segment segment{ {-0.7f, 0.3f, 0.0f}, {2.0f, -0.5f, 0.0f}, WHITE };
 	Vector3 point{ -1.5f, 0.6f, 0.6f };
 
-	Vector3 project = Project(Subtract(point, segment.origin), segment.diff);
+	Vector3 project = Project(Subtract(point, segment.origin), segment.dift);
 	Vector3 closestPoint = ClosestPoint(point, segment);
 
 	Sphere pointSphere{ point, 0.01f };
@@ -746,12 +765,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	AABB aabb1{
 		.min{-0.5f, -0.5f, -0.5f},
-		.max{0.0f, 0.0f, 0.0f},
-	};
-
-	AABB aabb2{
-		.min{0.2f, 0.2f, 0.2f},
-		.max{1.0f, 1.0f, 1.0f},
+		.max{0.5f, 0.5f, 0.5f},
 	};
 
 	aabb1.min.x = (std::min)(aabb1.min.x, aabb1.max.x);
@@ -760,13 +774,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	aabb1.max.y = (std::max)(aabb1.min.y, aabb1.max.y);
 	aabb1.min.z = (std::min)(aabb1.min.z, aabb1.max.z);
 	aabb1.max.z = (std::max)(aabb1.min.z, aabb1.max.z);
-
-	aabb2.min.x = (std::min)(aabb2.min.x, aabb2.max.x);
-	aabb2.max.x = (std::max)(aabb2.min.x, aabb2.max.x);
-	aabb2.min.y = (std::min)(aabb2.min.y, aabb2.max.y);
-	aabb2.max.y = (std::max)(aabb2.min.y, aabb2.max.y);
-	aabb2.min.z = (std::min)(aabb2.min.z, aabb2.max.z);
-	aabb2.max.z = (std::max)(aabb2.min.z, aabb2.max.z);
 
 	int kWindowWidth = 1280;
 
@@ -794,8 +801,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		ImGui::DragFloat3("CameraRotate", &cameraRotate.x, 0.01f);
 		ImGui::DragFloat3("aabb1.min", &aabb1.min.x, 0.01f);
 		ImGui::DragFloat3("aabb1.max", &aabb1.max.x, 0.01f);
-		ImGui::DragFloat3("Sphere1Center", &sphere.center.x, 0.01f);
-		ImGui::DragFloat("Sphere1Radius", &sphere.radius, 0.01f);
+		ImGui::DragFloat3("SegmentOrigin", &segment.origin.x, 0.01f);
+		ImGui::DragFloat3("SegmentDift", &segment.dift.x, 0.01f);
 
 		ImGui::End();
 
@@ -812,9 +819,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		Matrix4x4 viewportMatrix = MakeViewportMatrix(0, 0, float(kWindowWidth), float(kWindowHeight), 0.0f, 1.0f);
 		
 		Vector3 start = Transform(Transform(segment.origin, worldViewProjectionMatrix), viewportMatrix);
-		Vector3 end = Transform(Transform(Add(segment.origin, segment.diff), worldViewProjectionMatrix), viewportMatrix);
+		Vector3 end = Transform(Transform(Add(segment.origin, segment.dift), worldViewProjectionMatrix), viewportMatrix);
 
-		segment.color = IsCollision(aabb1, sphere) ? RED : WHITE;
+		segment.color = IsCollision(aabb1, segment) ? RED : WHITE;
 
 		///
 		/// ↑更新処理ここまで
@@ -826,11 +833,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 		DrawGrid(worldViewProjectionMatrix, viewportMatrix);
-		//DrawSegment(segment, worldViewProjectionMatrix, viewportMatrix, segment.color);
+		DrawSegment(segment, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		//DrawTriangle(triangle, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		//DrawPlane(plane, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		DrawAABB(aabb1, worldViewProjectionMatrix, viewportMatrix, segment.color);
-		DrawSphere(sphere, worldViewProjectionMatrix, viewportMatrix, sphere.color);
+		//DrawSphere(sphere, worldViewProjectionMatrix, viewportMatrix, sphere.color);
 
 		///
 		/// ↑描画処理ここまで
