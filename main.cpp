@@ -727,29 +727,36 @@ Vector3 Lerp(const Vector3& v1, const Vector3& v2, float t)
 	return { t * v1.x + (1.0f - t) * v2.x,  t * v1.y + (1.0f - t) * v2.y,  t * v1.z + (1.0f - t) * v2.z };
 }
 
-Vector3 Bezier(const Vector3& v1, const Vector3& v2, const Vector3& v3, float t)
+Vector3 Bezier(const Vector3& v1, const Vector3& v2, const Vector3& v3, const Vector3& v4, float t)
 {
 	Vector3 v1v2 = Lerp(v1, v2, t);
 	Vector3 v2v3 = Lerp(v2, v3, t);
+	Vector3 v3v4 = Lerp(v3, v4, t);
 	Vector3 v =  Lerp(v1v2, v2v3, t);
 	return v;
 }
 
 
-void DrawBezier(const Vector3& controlPoint0, const Vector3& controlPoint1, const Vector3& controlPoint2,
+void DrawCatmullRom(const Vector3& controlPoint0, const Vector3& controlPoint1, const Vector3& controlPoint2, const Vector3& controlPoint3,
 	const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewPortMatrix, uint32_t color)
 {
 	Vector3 controlPointScreen0 = Transform(Transform(controlPoint0, viewProjectionMatrix), viewPortMatrix);
 	Novice::DrawEllipse(
 		int(controlPointScreen0.x), int(controlPointScreen0.y), 10, 10, 0.0f, WHITE, kFillModeSolid);
+
 	Vector3 controlPointScreen1 = Transform(Transform(controlPoint1, viewProjectionMatrix), viewPortMatrix);
 	Novice::DrawEllipse(
 		int(controlPointScreen1.x), int(controlPointScreen1.y), 10, 10, 0.0f, WHITE, kFillModeSolid);
+
 	Vector3 controlPointScreen2 = Transform(Transform(controlPoint2, viewProjectionMatrix), viewPortMatrix);
 	Novice::DrawEllipse(
 		int(controlPointScreen2.x), int(controlPointScreen2.y), 10, 10, 0.0f, WHITE, kFillModeSolid);
 
-	constexpr int kNumDivide = 32;
+	Vector3 controlPointScreen3 = Transform(Transform(controlPoint3, viewProjectionMatrix), viewPortMatrix);
+	Novice::DrawEllipse(
+		int(controlPointScreen3.x), int(controlPointScreen3.y), 10, 10, 0.0f, WHITE, kFillModeSolid);
+
+	constexpr int kNumDivide = 64;
 	constexpr float kNumDivdeF = float(kNumDivide);
 
 	for (int divideIndex = 0; divideIndex < kNumDivide; ++divideIndex)
@@ -823,10 +830,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		.max{0.5f, 0.5f, 0.5f},
 	};
 
-	Vector3 controlPoints[3]{
+	Vector3 controlPoints[4]{
 		{-0.8f, 0.58f, 1.0f},
 		{1.76f, 1.0f, -0.3f},
 		{0.94f, -0.7f, 2.3f},
+		{-0.53f, -0.26f, -0.15f},
 	};
 
 	aabb1.min.x = (std::min)(aabb1.min.x, aabb1.max.x);
@@ -863,6 +871,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		ImGui::DragFloat3("controlPoints[0]", &controlPoints[0].x, 0.01f);
 		ImGui::DragFloat3("controlPoints[1]", &controlPoints[1].x, 0.01f);
 		ImGui::DragFloat3("controlPoints[2]", &controlPoints[2].x, 0.01f);
+		ImGui::DragFloat3("controlPoints[3]", &controlPoints[3].x, 0.01f);
 		ImGui::End();
 
 		Matrix4x4 worldMatrix = MakeAffineMatrix({ 1.0f,1.0f,1.0f }, { 0.0f, 0.0f,0.0f }, translate);
@@ -892,7 +901,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 		DrawGrid(worldViewProjectionMatrix, viewportMatrix);
-		DrawBezier(controlPoints[0], controlPoints[1], controlPoints[2], worldViewProjectionMatrix, viewportMatrix, BLUE);
+		DrawCatmullRom(controlPoints[0], controlPoints[1], controlPoints[2], controlPoints[3], worldViewProjectionMatrix, viewportMatrix, BLUE);
 		//DrawSegment(segment, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		//DrawTriangle(triangle, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		//DrawPlane(plane, worldViewProjectionMatrix, viewportMatrix, WHITE);
