@@ -722,6 +722,53 @@ void DrawAABB(const AABB& aabb, const Matrix4x4& viewProjectionMatrix, const Mat
 	}
 }
 
+Vector3 Lerp(const Vector3& v1, const Vector3& v2, float t)
+{
+	return { t * v1.x + (1.0f - t) * v2.x,  t * v1.y + (1.0f - t) * v2.y,  t * v1.z + (1.0f - t) * v2.z };
+}
+
+Vector3 Bezier(const Vector3& v1, const Vector3& v2, const Vector3& v3, float t)
+{
+	Vector3 v1v2 = Lerp(v1, v2, t);
+	Vector3 v2v3 = Lerp(v2, v3, t);
+	Vector3 v =  Lerp(v1v2, v2v3, t);
+	return v;
+}
+
+
+void DrawBezier(const Vector3& controlPoint0, const Vector3& controlPoint1, const Vector3& controlPoint2,
+	const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewPortMatrix, uint32_t color)
+{
+	Vector3 controlPointScreen0 = Transform(Transform(controlPoint0, viewProjectionMatrix), viewPortMatrix);
+	Novice::DrawEllipse(
+		int(controlPointScreen0.x), int(controlPointScreen0.y), 10, 10, 0.0f, WHITE, kFillModeSolid);
+	Vector3 controlPointScreen1 = Transform(Transform(controlPoint1, viewProjectionMatrix), viewPortMatrix);
+	Novice::DrawEllipse(
+		int(controlPointScreen1.x), int(controlPointScreen1.y), 10, 10, 0.0f, WHITE, kFillModeSolid);
+	Vector3 controlPointScreen2 = Transform(Transform(controlPoint2, viewProjectionMatrix), viewPortMatrix);
+	Novice::DrawEllipse(
+		int(controlPointScreen2.x), int(controlPointScreen2.y), 10, 10, 0.0f, WHITE, kFillModeSolid);
+
+	constexpr int kNumDivide = 32;
+	constexpr float kNumDivdeF = float(kNumDivide);
+
+	for (int divideIndex = 0; divideIndex < kNumDivide; ++divideIndex)
+	{
+		float t = float(divideIndex) / kNumDivdeF;
+		float nextT = float(divideIndex + 1) / kNumDivdeF;
+		Vector3 bezierPoint =
+			Bezier(controlPoint0, controlPoint1, controlPoint2, t);
+		Vector3 bezierPonitNext =
+			Bezier(controlPoint0, controlPoint1, controlPoint2, nextT);
+		Vector3 bezierPointScreen = Transform(Transform(bezierPoint, viewProjectionMatrix), viewPortMatrix);
+		Vector3 bezierPointNextScreen = Transform(Transform(bezierPonitNext, viewProjectionMatrix), viewPortMatrix);
+		Novice::DrawLine(
+			int(bezierPointScreen.x), int(bezierPointScreen.y), int(bezierPointNextScreen.x),
+			int(bezierPointNextScreen.y), color);
+
+	}
+}
+
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
@@ -776,6 +823,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		.max{0.5f, 0.5f, 0.5f},
 	};
 
+	Vector3 controlPoints[3]{
+		{-0.8f, 0.58f, 1.0f},
+		{1.76f, 1.0f, -0.3f},
+		{0.94f, -0.7f, 2.3f},
+	};
+
 	aabb1.min.x = (std::min)(aabb1.min.x, aabb1.max.x);
 	aabb1.max.x = (std::max)(aabb1.min.x, aabb1.max.x);
 	aabb1.min.y = (std::min)(aabb1.min.y, aabb1.max.y);
@@ -807,11 +860,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		ImGui::Begin("Window");
 		ImGui::DragFloat3("CameraTranslate", &cameraTranslate.x, 0.01f);
 		ImGui::DragFloat3("CameraRotate", &cameraRotate.x, 0.01f);
-		ImGui::DragFloat3("aabb1.min", &aabb1.min.x, 0.01f);
-		ImGui::DragFloat3("aabb1.max", &aabb1.max.x, 0.01f);
-		ImGui::DragFloat3("SegmentOrigin", &segment.origin.x, 0.01f);
-		ImGui::DragFloat3("SegmentDift", &segment.dift.x, 0.01f);
-
+		ImGui::DragFloat3("controlPoints[0]", &controlPoints[0].x, 0.01f);
+		ImGui::DragFloat3("controlPoints[1]", &controlPoints[1].x, 0.01f);
+		ImGui::DragFloat3("controlPoints[2]", &controlPoints[2].x, 0.01f);
 		ImGui::End();
 
 		Matrix4x4 worldMatrix = MakeAffineMatrix({ 1.0f,1.0f,1.0f }, { 0.0f, 0.0f,0.0f }, translate);
@@ -841,10 +892,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 		DrawGrid(worldViewProjectionMatrix, viewportMatrix);
-		DrawSegment(segment, worldViewProjectionMatrix, viewportMatrix, WHITE);
+		DrawBezier(controlPoints[0], controlPoints[1], controlPoints[2], worldViewProjectionMatrix, viewportMatrix, BLUE);
+		//DrawSegment(segment, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		//DrawTriangle(triangle, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		//DrawPlane(plane, worldViewProjectionMatrix, viewportMatrix, WHITE);
-		DrawAABB(aabb1, worldViewProjectionMatrix, viewportMatrix, segment.color);
+		//DrawAABB(aabb1, worldViewProjectionMatrix, viewportMatrix, segment.color);
 		//DrawSphere(sphere, worldViewProjectionMatrix, viewportMatrix, sphere.color);
 
 		///
