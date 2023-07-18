@@ -779,7 +779,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	char keys[256] = {0};
 	char preKeys[256] = {0};
 
-	Segment segment{ {-0.7f, 0.3f, 0.0f}, {2.0f, -0.5f, 0.0f}, WHITE };
+	Segment segment{ {0.0f, 0.0f, 0.0f}, {2.0f, -0.5f, 0.0f}, WHITE };
 	Vector3 point{ -1.5f, 0.6f, 0.6f };
 
 	Vector3 project = Project(Subtract(point, segment.origin), segment.dift);
@@ -796,11 +796,43 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	Vector3 cameraRotate = { 0.26f,0.0f,0.0f };
 
-	Sphere sphere =
+	Vector3 translates[3] = {
+	{0.2f, 1.0f, 0.0f},
+	{0.4f, 0.0f, 0.0f},
+	{0.3f, 0.0f, 0.0f}
+	};
+
+	Vector3 rotates[3] = {
+		{0.0f, 0.0f, -6.8f},
+		{0.0f, 0.0f, -1.4f},
+		{0.0f, 0.0f, 0.0f}
+	};
+
+	Vector3 scales[3] = {
+		{1.0f, 1.0f, 1.0f},
+		{1.0f, 1.0f, 1.0f},
+		{1.0f, 1.0f, 1.0f}
+	};
+
+	Sphere sphereR =
 	{
 		{0.0f,0.0f,0.0f},
-		0.5f,
-		WHITE
+		0.1f,
+		RED
+	};
+
+	Sphere sphereG =
+	{
+		{0.0f,0.0f,0.0f},
+		0.1f,
+		GREEN
+	};
+
+	Sphere sphereB =
+	{
+		{0.0f,0.0f,0.0f},
+		0.1f,
+		BLUE
 	};
 
 	Plane plane =
@@ -860,12 +892,24 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		ImGui::Begin("Window");
 		ImGui::DragFloat3("CameraTranslate", &cameraTranslate.x, 0.01f);
 		ImGui::DragFloat3("CameraRotate", &cameraRotate.x, 0.01f);
-		ImGui::DragFloat3("controlPoints[0]", &controlPoints[0].x, 0.01f);
-		ImGui::DragFloat3("controlPoints[1]", &controlPoints[1].x, 0.01f);
-		ImGui::DragFloat3("controlPoints[2]", &controlPoints[2].x, 0.01f);
+		ImGui::DragFloat3("scales[0]", &scales[0].x, 0.01f);
+		ImGui::DragFloat3("Rotates[0]", &rotates[0].x, 0.01f);
+		ImGui::DragFloat3("translates[0]", &translates[0].x, 0.01f);
+		ImGui::DragFloat3("scales[1]", &scales[1].x, 0.01f);
+		ImGui::DragFloat3("Rotates[1]", &rotates[1].x, 0.01f);
+		ImGui::DragFloat3("translates[1]", &translates[1].x, 0.01f);
+		ImGui::DragFloat3("scales[2]", &scales[2].x, 0.01f);
+		ImGui::DragFloat3("Rotates[2]", &rotates[2].x, 0.01f);
+		ImGui::DragFloat3("translates[2]", &translates[2].x, 0.01f);
+
 		ImGui::End();
 
 		Matrix4x4 worldMatrix = MakeAffineMatrix({ 1.0f,1.0f,1.0f }, { 0.0f, 0.0f,0.0f }, translate);
+
+		// 肩肘腕のworldMatrix
+		Matrix4x4 shoulderWM = MakeAffineMatrix(scales[0], rotates[0], translates[0]);
+		Matrix4x4 elbowWM = MakeAffineMatrix(scales[1], rotates[1], translates[1]) * shoulderWM;
+		Matrix4x4 handWM = MakeAffineMatrix(scales[2], rotates[2], translates[2]) * elbowWM;
 
 		Matrix4x4 cameraMatrix = MakeAffineMatrix({ 1.0f,1.0f,1.0f }, cameraRotate, cameraTranslate);
 
@@ -877,10 +921,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 		Matrix4x4 viewportMatrix = MakeViewportMatrix(0, 0, float(kWindowWidth), float(kWindowHeight), 0.0f, 1.0f);
 		
-		Vector3 start = Transform(Transform(segment.origin, worldViewProjectionMatrix), viewportMatrix);
-		Vector3 end = Transform(Transform(Add(segment.origin, segment.dift), worldViewProjectionMatrix), viewportMatrix);
+		Matrix4x4 shoulderWVPM = Multiply(shoulderWM, Multiply(viewMatrix, projectionMatrix));
+		Matrix4x4 elbowWVPM = Multiply(elbowWM, Multiply(viewMatrix, projectionMatrix));
+		Matrix4x4 handWVPM = Multiply(handWM, Multiply(viewMatrix, projectionMatrix));
 
-		segment.color = IsCollision(aabb1, segment) ? RED : WHITE;
+		Vector3 shoulderStart = Transform(Transform(segment.origin, shoulderWVPM), viewportMatrix);
+		Vector3 shoulderEnd = Transform(Transform(segment.origin ,elbowWVPM), viewportMatrix);
+
+		Vector3 elbowStart = Transform(Transform(segment.origin, elbowWVPM), viewportMatrix);
+		Vector3 elbowEnd = Transform(Transform(segment.origin, handWVPM), viewportMatrix);
+
+
+		//segment.color = IsCollision(aabb1, segment) ? RED : WHITE;
 
 		///
 		/// ↑更新処理ここまで
@@ -892,12 +944,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 		DrawGrid(worldViewProjectionMatrix, viewportMatrix);
-		DrawBezier(controlPoints[0], controlPoints[1], controlPoints[2], worldViewProjectionMatrix, viewportMatrix, BLUE);
+		//DrawBezier(controlPoints[0], controlPoints[1], controlPoints[2], worldViewProjectionMatrix, viewportMatrix, BLUE);
 		//DrawSegment(segment, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		//DrawTriangle(triangle, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		//DrawPlane(plane, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		//DrawAABB(aabb1, worldViewProjectionMatrix, viewportMatrix, segment.color);
-		//DrawSphere(sphere, worldViewProjectionMatrix, viewportMatrix, sphere.color);
+		DrawSphere(sphereR, shoulderWVPM, viewportMatrix, sphereR.color);
+		DrawSphere(sphereG, elbowWVPM, viewportMatrix, sphereG.color);
+		DrawSphere(sphereB, handWVPM, viewportMatrix, sphereB.color);
+		Novice::DrawLine(int(shoulderStart.x), int(shoulderStart.y), int(shoulderEnd.x), int(shoulderEnd.y), segment.color);
+		Novice::DrawLine(int(elbowStart.x), int(elbowStart.y), int(elbowEnd.x), int(elbowEnd.y), segment.color);
 
 		///
 		/// ↑描画処理ここまで
